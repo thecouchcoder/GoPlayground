@@ -10,14 +10,11 @@ import (
 
 func main() {
 	ctx := context.Background()
-	err := SpawnProcess(ctx)
-	if err != nil {
-		fmt.Println(err)
-	}
+	SpawnProcesses(ctx)
 	fmt.Println("Done!")
 }
 
-func SpawnProcess(ctx context.Context) error {
+func SpawnProcess(ctx context.Context) {
 	dctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
 	done := make(chan bool)
@@ -27,26 +24,40 @@ func SpawnProcess(ctx context.Context) error {
 	}()
 	select {
 	case <-dctx.Done():
-		return fmt.Errorf("time out %v", dctx.Err())
+		fmt.Printf("time out %v", dctx.Err())
 	case <-done:
-		return nil
+		return
 	}
 
 }
 
 func SpawnProcesses(ctx context.Context) {
 	var wg sync.WaitGroup
-	for i := 0; i < 3; i++ {
-		wg.Add(1)
-		dctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
-		go func(dctx context.Context, i int) {
+	n := 3
+	wg.Add(n)
+
+	for i := 0; i < n; i++ {
+		go func(i int) {
+			dctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 			defer cancel()
-			RandomProcess(dctx, i)
-			wg.Done()
-		}(dctx, i)
+			done := make(chan bool)
+
+			go func(dctx context.Context, i int) {
+				RandomProcess(dctx, i)
+				done <- true
+			}(dctx, i)
+			select {
+			case <-dctx.Done():
+				fmt.Printf("Process %d: %v\n", i, dctx.Err())
+				wg.Done()
+			case <-done:
+				wg.Done()
+			}
+		}(i)
 	}
 
 	wg.Wait()
+
 }
 
 func RandomProcess(dctx context.Context, i int) {
