@@ -10,21 +10,35 @@ import (
 
 func main() {
 	ctx := context.Background()
-	SpawnProcesses(ctx)
+	err := SpawnProcess(ctx)
+	if err != nil {
+		fmt.Println(err)
+	}
 	fmt.Println("Done!")
 }
 
-func SpawnProcess(ctx context.Context) {
-	dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func SpawnProcess(ctx context.Context) error {
+	dctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 	defer cancel()
-	RandomProcess(dctx, 1)
+	done := make(chan bool)
+	go func() {
+		RandomProcess(dctx, 1)
+		done <- true
+	}()
+	select {
+	case <-dctx.Done():
+		return fmt.Errorf("time out %v", dctx.Err())
+	case <-done:
+		return nil
+	}
+
 }
 
 func SpawnProcesses(ctx context.Context) {
 	var wg sync.WaitGroup
 	for i := 0; i < 3; i++ {
 		wg.Add(1)
-		dctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		dctx, cancel := context.WithTimeout(ctx, 200*time.Millisecond)
 		go func(dctx context.Context, i int) {
 			defer cancel()
 			RandomProcess(dctx, i)
@@ -36,22 +50,8 @@ func SpawnProcesses(ctx context.Context) {
 }
 
 func RandomProcess(dctx context.Context, i int) {
-	n := rand.Int63n(11)
+	n := rand.Int63n(500)
 	fmt.Printf("Process %d: Started for %d\n", i, n)
-	for {
-		select {
-		case <-dctx.Done():
-			fmt.Printf("Process %d: Timed out\n", i)
-			return
-		default:
-			if n == 0 {
-				fmt.Printf("Process %d: Finished\n", i)
-				return
-
-			}
-			time.Sleep(1 * time.Second)
-			fmt.Printf("Process %d: Running for %d more\n", i, n)
-			n--
-		}
-	}
+	time.Sleep(time.Duration(n) * time.Millisecond)
+	fmt.Printf("Process %d: Finished\n", i)
 }
