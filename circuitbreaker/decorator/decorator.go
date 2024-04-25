@@ -1,58 +1,20 @@
-package main
+package decorator
 
 import (
-	"circuitbreaker/decorator"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 )
 
-func main() {
-	fmt.Println("Startup")
-	cb := NewCircuitBreaker()
-	for i := range 100 {
-		callService(cb, i)
-		time.Sleep(1 * time.Millisecond)
-	}
+type Gateway struct{}
 
-	decorator := decorator.NewDecoratorCircuitBreaker(decorator.Gateway{})
-	for i := range 100 {
-		callDecoratorService(decorator, i)
-		time.Sleep(1 * time.Millisecond)
-	}
-}
-
-func callDecoratorService(cb decorator.CircuitBreaker, req int) error {
-	_, err := cb.Execute(req)
-
-	if err != nil {
-		fmt.Printf("%v: got error %v\n", req, err)
-	} else {
-		fmt.Println("Success")
-	}
-
-	return err
-}
-
-func callService(cb CircuitBreaker, req int) {
-	_, err := cb.Execute(func() (interface{}, error) {
-		return externalCall(req)
-	})
-
-	if err != nil {
-		fmt.Printf("%v: got error %v\n", req, err)
-	} else {
-		fmt.Println("Success")
-	}
-}
-
-func externalCall(req int) (interface{}, error) {
+func (g Gateway) Execute(req interface{}) (interface{}, error) {
 	return nil, fmt.Errorf("bad Request %v", req)
 }
 
 type CircuitBreaker interface {
-	Execute(func() (interface{}, error)) (interface{}, error)
+	Execute(req interface{}) (interface{}, error)
 }
 
 type State string
@@ -63,7 +25,7 @@ const (
 )
 
 var (
-	ErrCircuitOpen = errors.New("error the circuit is open")
+	ErrCircuitOpen = errors.New("error the decorator circuit is open")
 )
 
 type circuitBreaker struct {
@@ -72,16 +34,18 @@ type circuitBreaker struct {
 	maxThreshold int
 	openInterval time.Duration
 	openCh       chan interface{}
+	wrappee      CircuitBreaker
 	mutex        sync.Mutex
 }
 
-func NewCircuitBreaker() CircuitBreaker {
+func NewDecoratorCircuitBreaker(wrapee CircuitBreaker) CircuitBreaker {
 	cb := circuitBreaker{
 		state:        closed,
 		fails:        0,
 		maxThreshold: 5,
 		openInterval: 50 * time.Millisecond,
 		openCh:       make(chan interface{}),
+		wrappee:      wrapee,
 	}
 
 	go cb.openWatcher()
@@ -98,13 +62,13 @@ func (cb *circuitBreaker) openWatcher() {
 	}
 }
 
-func (cb *circuitBreaker) Execute(req func() (interface{}, error)) (interface{}, error) {
+func (cb *circuitBreaker) Execute(req interface{}) (interface{}, error) {
 	err := cb.doPreRequest()
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := req()
+	res, err := cb.wrappee.Execute(req)
 
 	err = cb.doPostRequest(err)
 	if err != nil {
