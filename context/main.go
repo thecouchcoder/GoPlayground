@@ -28,7 +28,6 @@ func SpawnProcess(ctx context.Context) {
 	case <-done:
 		return
 	}
-
 }
 
 func SpawnProcesses(ctx context.Context) {
