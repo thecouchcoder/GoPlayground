@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 
@@ -13,6 +14,17 @@ var ErrorNoSuchKey = errors.New("no such key")
 
 var store = make(map[string]string)
 
+func main() {
+	r := mux.NewRouter()
+
+	r.HandleFunc("/{name}", helloGoHandler)
+	r.HandleFunc("/v1/key/{key}", getHandler).Methods("GET")
+	r.HandleFunc("/v1/key/{key}", putHandler).Methods("PUT")
+	r.HandleFunc("/v1/key/{key}", deleteHandler).Methods("DELETE")
+
+	log.Fatal(http.ListenAndServe(":8080", r))
+}
+
 func helloGoHandler(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	name := vars["name"]
@@ -20,12 +32,48 @@ func helloGoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(response))
 }
 
-func main() {
-	r := mux.NewRouter()
+func getHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	key := vars["key"]
+	result, err := Get(key)
+	if errors.Is(err, ErrorNoSuchKey) {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	} else {
+		w.Write([]byte(result))
+	}
+}
 
-	r.HandleFunc("/{name}", helloGoHandler)
+func putHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	key := vars["key"]
+	value, err := io.ReadAll(r.Body)
+	defer r.Body.Close()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	err = Put(key, string(value))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	log.Fatal(http.ListenAndServe(":8080", r))
+	w.WriteHeader(http.StatusCreated)
+}
+
+func deleteHandler(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	key := vars["key"]
+	err := Delete(key)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func Put(key string, value string) error {
