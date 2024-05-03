@@ -1,74 +1,67 @@
 package main
 
 import (
-	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
-func TestPut(t *testing.T) {
-	const key = "put-key"
-	const value = "put-val"
-	defer delete(store, key)
+func TestAcceptance(t *testing.T) {
+	const key = "key"
+	const value = "value"
 
-	if _, ok := store[key]; ok {
-		t.Error("Found key before put")
-	}
+	s := httptest.NewServer(GetRouter())
+	defer s.Close()
 
-	err := Put(key, value)
-
+	resp, err := s.Client().Get(s.URL + "/v1/key/" + key)
 	if err != nil {
-		t.Error(err)
+		t.Fatal("Error making GET request")
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatal("Key found before created")
 	}
 
-	val, ok := store[key]
-	if !ok {
-		t.Error("Key not inserted")
-	}
-	if value != val {
-		t.Error("Value doesn't match")
-	}
-}
-func TestGet(t *testing.T) {
-	const key = "get-key"
-	const value = "get-val"
-	defer delete(store, key)
-
-	_, err := Get(key)
-	if err == nil {
-		t.Error("Expected an error")
-	}
-	if !errors.Is(err, ErrorNoSuchKey) {
-		t.Error("unexpected error", err)
-	}
-
-	store[key] = value
-
-	val, err := Get(key)
+	req, err := http.NewRequest("PUT", s.URL+"/v1/key/"+key, strings.NewReader(value))
 	if err != nil {
-		t.Error("unexpected error", err)
+		t.Fatal("Can't create PUT request")
 	}
-	if val != value {
-		t.Error("Wrong value")
-	}
-}
-
-func TestDelete(t *testing.T) {
-	const key = "delete-key"
-	const value = "delete-val"
-	defer delete(store, key)
-
-	store[key] = value
-
-	if _, contains := store[key]; !contains {
-		t.Error("key/value doesn't exist")
+	resp, err = s.Client().Do(req)
+	if err != nil || resp.StatusCode != http.StatusCreated {
+		t.Fatal("Err making PUT request")
 	}
 
-	err := Delete(key)
+	resp, err = s.Client().Get(s.URL + "/v1/key/" + key)
 	if err != nil {
-		t.Error("unexpected error", err)
+		t.Fatal("Error making GET request")
+	}
+	if resp.StatusCode != http.StatusOK {
+		t.Fatal("Key not found after create")
+	}
+	respValue, err := io.ReadAll(resp.Body)
+	defer resp.Body.Close()
+	if err != nil {
+		t.Fatal("Cannot read body")
+	}
+	if string(respValue) != value {
+		t.Fatal("Value does not match")
 	}
 
-	if _, contains := store[key]; contains {
-		t.Error("key still exists")
+	req, err = http.NewRequest("DELETE", s.URL+"/v1/key/"+key, nil)
+	if err != nil {
+		t.Fatal("Can't create DELETE request")
+	}
+	resp, err = s.Client().Do(req)
+	if err != nil || resp.StatusCode != http.StatusOK {
+		t.Fatal("Err making DELETE request")
+	}
+
+	resp, err = s.Client().Get(s.URL + "/v1/key/" + key)
+	if err != nil {
+		t.Fatal("Error making GET request")
+	}
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatal("Key found after delete")
 	}
 }
