@@ -2,6 +2,7 @@ package main
 
 import (
 	"KeyValueStore/kvp"
+	"KeyValueStore/transactionlog"
 	"errors"
 	"fmt"
 	"io"
@@ -11,12 +12,18 @@ import (
 	"github.com/gorilla/mux"
 )
 
+var logger transactionlog.TransactionLogger
+
 func main() {
 	r := GetRouter()
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
 
 func GetRouter() http.Handler {
+	err := initializeTransactionLogger()
+	if err != nil {
+		panic("can't initialize")
+	}
 	r := mux.NewRouter()
 
 	r.HandleFunc("/{name}", helloGoHandler)
@@ -25,6 +32,34 @@ func GetRouter() http.Handler {
 	r.HandleFunc("/v1/key/{key}", deleteHandler).Methods("DELETE")
 
 	return r
+}
+
+func initializeTransactionLogger() error {
+	var err error
+	logger, err = transactionlog.NewFileTransactionLogger("log.txt")
+	if err != nil {
+		return err
+	}
+
+	eventCh, errCh := logger.ReadEvents()
+	event := transactionlog.Event{}
+	more := true
+	for more && err == nil {
+		select {
+		case err = <-errCh:
+		case event, more = <-eventCh:
+			switch event.EventType {
+			case transactionlog.DELETE:
+				kvp.Delete(event.Key)
+			case transactionlog.PUT:
+				kvp.Put(event.Key, event.Value)
+			}
+		}
+	}
+
+	logger.Run()
+
+	return err
 }
 
 func helloGoHandler(w http.ResponseWriter, r *http.Request) {
@@ -64,6 +99,7 @@ func putHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	logger.LogPut(key, string(value))
 
 	w.WriteHeader(http.StatusCreated)
 }
@@ -76,4 +112,5 @@ func deleteHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	logger.LogDelete(key)
 }

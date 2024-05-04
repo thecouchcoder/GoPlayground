@@ -8,9 +8,9 @@ import (
 func TestPut(t *testing.T) {
 	const key = "put-key"
 	const value = "put-val"
-	defer delete(store, key)
+	defer delete(store.m, key)
 
-	if _, ok := store[key]; ok {
+	if _, ok := store.m[key]; ok {
 		t.Error("Found key before put")
 	}
 
@@ -20,7 +20,7 @@ func TestPut(t *testing.T) {
 		t.Error(err)
 	}
 
-	val, ok := store[key]
+	val, ok := store.m[key]
 	if !ok {
 		t.Error("Key not inserted")
 	}
@@ -31,7 +31,7 @@ func TestPut(t *testing.T) {
 func TestGet(t *testing.T) {
 	const key = "get-key"
 	const value = "get-val"
-	defer delete(store, key)
+	defer delete(store.m, key)
 
 	_, err := Get(key)
 	if err == nil {
@@ -41,7 +41,7 @@ func TestGet(t *testing.T) {
 		t.Error("unexpected error", err)
 	}
 
-	store[key] = value
+	store.m[key] = value
 
 	val, err := Get(key)
 	if err != nil {
@@ -55,11 +55,11 @@ func TestGet(t *testing.T) {
 func TestDelete(t *testing.T) {
 	const key = "delete-key"
 	const value = "delete-val"
-	defer delete(store, key)
+	defer delete(store.m, key)
 
-	store[key] = value
+	store.m[key] = value
 
-	if _, contains := store[key]; !contains {
+	if _, contains := store.m[key]; !contains {
 		t.Error("key/value doesn't exist")
 	}
 
@@ -68,7 +68,7 @@ func TestDelete(t *testing.T) {
 		t.Error("unexpected error", err)
 	}
 
-	if _, contains := store[key]; contains {
+	if _, contains := store.m[key]; contains {
 		t.Error("key still exists")
 	}
 }
