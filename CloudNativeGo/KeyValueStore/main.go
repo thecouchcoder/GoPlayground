@@ -15,6 +15,7 @@ import (
 var logger transactionlog.TransactionLogger
 
 func main() {
+	defer logger.Close()
 	r := GetRouter()
 	log.Fatal(http.ListenAndServe(":8080", r))
 }
