@@ -3,8 +3,6 @@ package transactionlog
 import (
 	"database/sql"
 	"fmt"
-
-	_ "github.com/lib/pq"
 )
 
 type PostgresTransactionLogger struct {
@@ -88,8 +86,6 @@ func (l *PostgresTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
 	outErrors := make(chan error, 1)
 
 	go func() {
-		var e Event
-
 		defer close(outEvent)
 		defer close(outErrors)
 

@@ -15,9 +15,10 @@ import (
 var logger transactionlog.TransactionLogger
 
 func main() {
-	defer logger.Close()
+	//defer logger.Close()
 	r := GetRouter()
-	log.Fatal(http.ListenAndServe(":8080", r))
+	log.Fatal(http.ListenAndServeTLS(":8080", "certificates/public.pem", "certificates/private.pem", r))
+	//log.Fatal(http.ListenAndServe(":8080", r))
 }
 
 func GetRouter() http.Handler {
