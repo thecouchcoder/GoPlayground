@@ -1,4 +1,4 @@
-package transactionlog
+package core
 
 type TransactionLogger interface {
 	LogPut(key string, value string)

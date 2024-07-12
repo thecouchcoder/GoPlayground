@@ -1,12 +1,17 @@
+FROM golang:1.16 as build
+
+COPY . /src
+
+WORKDIR /src
+
+RUN CGO_ENABLED=0 GOOS=linux go build -o kvs
+
 FROM scratch
 
-COPY kvs .
+COPY --from=build /src/kvs .
 
 # Create a directory in the container to store the certificates
-ADD certificates /certificates
-
-# Copy the entire certificates folder from the host into the container
-# COPY certificates /certificates
+COPY --from=build /src/certificates /certificates
 
 EXPOSE 8080
 

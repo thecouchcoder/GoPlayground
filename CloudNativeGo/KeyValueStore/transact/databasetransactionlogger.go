@@ -1,14 +1,15 @@
-package transactionlog
+package transact
 
 import (
+	"KeyValueStore/core"
 	"database/sql"
 	"fmt"
 )
 
 type PostgresTransactionLogger struct {
 	db     *sql.DB
-	events chan<- Event // write only channel
-	errors <-chan error // read only channel
+	events chan<- core.Event // write only channel
+	errors <-chan error      // read only channel
 }
 
 type PostgresDBParams struct {
@@ -18,7 +19,7 @@ type PostgresDBParams struct {
 	password string
 }
 
-func NewPostgresTransactionLogger(config PostgresDBParams) (TransactionLogger, error) {
+func NewPostgresTransactionLogger(config PostgresDBParams) (core.TransactionLogger, error) {
 	connStr := fmt.Sprintf("host=%s dbname=%s user=%s password=%s", config.host, config.dbName, config.user, config.password)
 	db, err := sql.Open("postgres", connStr)
 	if err != nil {
@@ -62,7 +63,7 @@ func (l *PostgresTransactionLogger) createTable() error {
 }
 
 func (l *PostgresTransactionLogger) Run() {
-	events := make(chan Event, 16)
+	events := make(chan core.Event, 16)
 	l.events = events
 
 	errors := make(chan error, 1)
@@ -81,8 +82,8 @@ func (l *PostgresTransactionLogger) Run() {
 	}()
 }
 
-func (l *PostgresTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
-	outEvent := make(chan Event)
+func (l *PostgresTransactionLogger) ReadEvents() (<-chan core.Event, <-chan error) {
+	outEvent := make(chan core.Event)
 	outErrors := make(chan error, 1)
 
 	go func() {
@@ -100,7 +101,7 @@ func (l *PostgresTransactionLogger) ReadEvents() (<-chan Event, <-chan error) {
 		defer rows.Close()
 
 		for rows.Next() {
-			var event Event
+			var event core.Event
 			if err := rows.Scan(&event.Sequence, &event.EventType, &event.Key, &event.Value); err != nil {
 				outErrors <- fmt.Errorf("error reading rows: %w", err)
 				return
@@ -122,16 +123,16 @@ func (l *PostgresTransactionLogger) Close() {
 }
 
 func (l *PostgresTransactionLogger) LogPut(key string, value string) {
-	ev := Event{
-		EventType: PUT,
+	ev := core.Event{
+		EventType: core.PUT,
 		Key:       key,
 		Value:     value,
 	}
 	l.events <- ev
 }
 func (l *PostgresTransactionLogger) LogDelete(key string) {
-	ev := Event{
-		EventType: DELETE,
+	ev := core.Event{
+		EventType: core.DELETE,
 		Key:       key,
 	}
 	l.events <- ev
